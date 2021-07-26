@@ -4,8 +4,8 @@ from os import path
 from fnmatch import fnmatch
 import logging
 import traceback
-from urlextract import URLExtract
 import requests
+import signal
 
 # setup logging
 logger = logging.getLogger('clipper')
@@ -20,31 +20,25 @@ logger_fh.setFormatter(logger_formatter)
 logger.addHandler(logger_fh)
 logger.addHandler(logger_ch)
 
-
-# list of glob style patterns
-patterns = ('http://*', 'https://*', 'ftp://*')
 # delay in seconds
 delay = 1.5
-# copying the following string will break the loop, exit
-exit_string = '!EXIT'
+is_exit = False
 
 
 def main():
-    "main loop, 'listens' to the clipboard. saves copied URLs to a text file"
+    global is_exit
     last_copied = paste()
-    current_directory = path.dirname(path.normpath(__file__))
-    url_extractor = URLExtract().find_urls
-    while True:
+    while not is_exit:
         try:
             copied = paste()
             if copied != last_copied:
-                logger.info(f'User copied: {copied}')
+                logger.info(f'Local Copied: {copied}')
                 requests.get('http://3.137.207.173:8080/clipboard/' + copied)
                 last_copied = copied
             remote = requests.get('http://3.137.207.173:8080/clipboard/').text;
             if remote != last_copied:
                 copy(remote)
-                logger.info('Remote copied: ' + remote)
+                logger.info(f'Remote Copied: {remote}')
                 last_copied = remote
         except OSError as e:
             logger.error(str(e))
@@ -52,15 +46,21 @@ def main():
         except Exception as e:
             logger.error(str(e))
             logger.error(''.join(traceback.format_tb(e.__traceback__)))
-
         sleep(delay)
+
+
+def handler(signum, frame):
+    global is_exit
+    is_exit = True
+    print("Receive a signal %d, is_exit = %d" % (signum, is_exit))
+
 
 if __name__ == '__main__':
     try:
-        logger.info('Use "ctrl+z" or "ctrl+c" to exit')
+        signal.signal(signal.SIGINT, handler)
+        signal.signal(signal.SIGTERM, handler)
+        logger.info('Use "ctrl+c" to exit')
         main()
-    except KeyboardInterrupt:
-        logger.info('User exited program')
     except Exception as e:
         logger.error('Unhandled exception, program exited. Info follows.')
         logger.error(str(e))

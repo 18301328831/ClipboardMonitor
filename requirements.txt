@@ -1,3 +1,2 @@
 ﻿clipboard==0.0.4
-URLExtract==0.14.0
 requests
